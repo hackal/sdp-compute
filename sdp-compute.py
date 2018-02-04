@@ -88,7 +88,7 @@ def index():
             filename = secure_filename(file.filename)
             file.save(os.path.join(app.config['UPLOAD_FOLDER'], filename))
             material = setupGoogleVisionAPI(filename)
-            print("material: " + material, file=sys.stderr)
+            #print("material: " + material, file=sys.stderr)
             result = material
             return json.dumps(result)
     #print("Finishing...", file=sys.stderr)
