@@ -67,7 +67,7 @@ def processGoogleVisionAPI(labels):
             potentialMaterials.add("aluminum")
 
     #Get rid of "set()" being printed when potentialMaterials is empty and return first
-    return list(potentialMaterials)[0]
+    return str(list(potentialMaterials))
 
 
 def allowed_file(filename):
