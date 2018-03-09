@@ -5,6 +5,10 @@ from werkzeug import secure_filename
 import sys
 import json
 
+#Imports for rotating image
+import cv2
+import numpy as np
+
 #Imports the Google Cloud client library
 from google.cloud import vision
 from google.cloud.vision import types
@@ -21,8 +25,6 @@ app.config.update(
 
 def setupGoogleVisionAPI(filename):
 
-    #print("Setting up API...", file=sys.stderr)
-
     #Authentication to API
     os.environ["GOOGLE_APPLICATION_CREDENTIALS"] = "auth.json"
 
@@ -34,7 +36,7 @@ def setupGoogleVisionAPI(filename):
     os.path.dirname(__file__),
     'classify/' + filename)
 
-    #print("file name: " + file_name, file=sys.stderr)
+    print("file name: " + file_name)
 
     # Loads the image into memory
     with io.open(file_name, 'rb') as image_file:
@@ -50,24 +52,36 @@ def setupGoogleVisionAPI(filename):
 
 def processGoogleVisionAPI(labels):
 
-    potentialMaterials = set()
+    potentialMaterials = {}
 
-    #print('Labels:', file=sys.stderr)
     for label in labels:
 
-        #print(label.description + " " + str(label.score), file=sys.stderr)
+        print(label.description + ": " + str(label.score))
 
-        if ("glass" in label.description) and (label.score > 0.7):
-            potentialMaterials.add("glass")
+        if ("glass" in label.description) and (label.score > 0.6):
+            if label.score > potentialMaterials.get("glass", 0.00):
+                potentialMaterials['glass'] = label.score
 
-        if ("plastic" in label.description) and (label.score > 0.7):
-            potentialMaterials.add("plastic")
+        if ("plastic" in label.description) and (label.score > 0.6):
+            if label.score > potentialMaterials.get("plastic", 0.00):
+                potentialMaterials['plastic'] = label.score
 
-        if (("aluminum" in label.description) or ("can" in label.description)) and (label.score > 0.7):
-            potentialMaterials.add("aluminum")
+        if (("aluminum" in label.description) or ("can" in label.description)) and (label.score > 0.6):
+            if label.score > potentialMaterials.get("aluminum", 0.00):
+                potentialMaterials['aluminum'] = label.score
 
-    #Get rid of "set()" being printed when potentialMaterials is empty and return first
-    return str(list(potentialMaterials))
+    print("Potential materials: ")
+    print(potentialMaterials)
+
+    material = {}
+    if len(potentialMaterials) > 0:
+        v=list(potentialMaterials.values())
+        k=list(potentialMaterials.keys())
+        print(k[v.index(max(v))] + " <- max")
+        material[k[v.index(max(v))]] = max(v)
+        print("Dictionary: ", material)
+
+    return material
 
 
 def allowed_file(filename):
@@ -78,23 +92,63 @@ def allowed_file(filename):
 def index():
 
     material = ""
+    print("hello00")
 
     if request.method == 'POST':
-
-        #print("Posting...", file=sys.stderr)
 
         file = request.files['file']
         if file and allowed_file(file.filename):
             filename = secure_filename(file.filename)
             file.save(os.path.join(app.config['UPLOAD_FOLDER'], filename))
-            material = setupGoogleVisionAPI(filename)
-            #print("material: " + material, file=sys.stderr)
-            result = material
+
+            #Rotate image so that the vision API looks at the image from
+            #multiple angles.
+            os.chdir('classify')
+            img = cv2.imread(filename)
+            num_rows, num_cols = img.shape[:2]
+
+            rotation_matrix = cv2.getRotationMatrix2D((num_cols/2, num_rows/2), 90, 1)
+            img_rotation = cv2.warpAffine(img, rotation_matrix, (num_cols, num_rows))
+            rotation_matrix1 = cv2.getRotationMatrix2D((num_cols/2, num_rows/2), 270, 1)
+            img_rotation1 = cv2.warpAffine(img, rotation_matrix1, (num_cols, num_rows))
+
+            cv2.imwrite('classify1.jpg',img_rotation)
+            cv2.imwrite('classify2.jpg',img_rotation1)
+            os.chdir('..')
+
+            #Combine the response from the upright photo and the flipped photo
+            materials = {}
+            materials.update(setupGoogleVisionAPI('classify1.jpg'))
+            materials.update(setupGoogleVisionAPI('classify2.jpg'))
+
+            v=list(materials.values())
+            k=list(materials.keys())
+            result = ""
+            if len(v) > 0:
+                result = k[v.index(max(v))]
+
+            print("result: ", result)
             return json.dumps(result)
-    #print("Finishing...", file=sys.stderr)
-    #resp = flask.Response("Foo bar baz")
-    #resp.headers['Access-Control-Allow-Origin'] = '*'
-    #return resp
+    return ""
+
+@app.route("/commands", methods=['GET', 'POST'])
+def commands():
+    if request.method == 'POST':
+        command = request.form.get("data")
+        print(command)
+        f = open('command.txt', 'w' )
+        f.write(command)
+        f.close()
+        return json.dumps("recieved")
+
+    if request.method == 'GET':
+        f = open('command.txt', 'r')
+        command = f.read()
+        #Empty the text file so command is not called again
+        f = open('command.txt', 'w' ).close()
+        return json.dumps(command)
+
+
     return ""
 
 if __name__ == "__main__":
