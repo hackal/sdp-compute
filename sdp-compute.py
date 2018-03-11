@@ -124,7 +124,7 @@ def index():
             result = []
             if len(v) > 0:
                 for key, value in materials.items():
-                    maxPrediction = k[v.index(max(v))]
+                    maxPrediction = max(v)
                     if value > (maxPrediction-0.1):
                         result.append(key)
 
