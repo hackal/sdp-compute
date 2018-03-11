@@ -77,7 +77,6 @@ def processGoogleVisionAPI(labels):
     if len(potentialMaterials) > 0:
         v=list(potentialMaterials.values())
         k=list(potentialMaterials.keys())
-        print(k[v.index(max(v))] + " <- max")
         material[k[v.index(max(v))]] = max(v)
         print("Dictionary: ", material)
 
@@ -92,7 +91,6 @@ def allowed_file(filename):
 def index():
 
     material = ""
-    print("hello00")
 
     if request.method == 'POST':
 
@@ -123,9 +121,13 @@ def index():
 
             v=list(materials.values())
             k=list(materials.keys())
-            result = ""
+            result = []
             if len(v) > 0:
-                result = k[v.index(max(v))]
+                for key, value in materials.items():
+                    maxPrediction = k[v.index(max(v))]
+                    if value > (maxPrediction-0.1):
+                        result.append(key)
+
 
             print("result: ", result)
             return json.dumps(result)
